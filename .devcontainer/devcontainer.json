@@ -1,0 +1,46 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/python
+{
+	"name": "Flight Software Development",
+	"build": {
+		"dockerfile": "Dockerfile",
+		"context": "."
+	},
+
+	// Configure tool-specific properties.
+	"customizations": {
+		// Configure properties specific to VS Code.
+		"vscode": {
+			"settings": {
+				// Make VS Code use the project venv automatically
+				"python.defaultInterpreterPath": "${containerWorkspaceFolder}/.venv/bin/python",
+				"python.terminal.activateEnvironment": true
+			},
+			"extensions": [
+			]
+		}
+	},
+
+	// Features to add to the dev container. More info: https://containers.dev/features.
+	"features": {
+		"ghcr.io/devcontainers/features/common-utils:2":{
+			"installZsh": "true",
+			"username": "vscode",
+			"userUid": "1000",
+			"userGid": "1000",
+			"upgradePackages": "true"
+		},
+		"ghcr.io/devcontainers/features/git:1": {},
+		"ghcr.io/devcontainers-extra/features/cmake:1": {},
+		"ghcr.io/devcontainers/features/python:1": {}
+	},
+
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": [9000],
+
+	// Create a venv and install deps into it (no system Python writes)
+	"postCreateCommand": "python -m venv .venv && ./.venv/bin/python -m pip install --upgrade pip && ./.venv/bin/pip install -r requirements.txt",
+
+	// ensure vscode user is used by default
+	"remoteUser": "vscode"
+}
