@@ -4,7 +4,7 @@ FROM debian:bookworm
 RUN apt update \
 	# install required shit
 	# npx because we love vibe coding
-	&& apt install -y
+	&& apt install -y \
 	cppzmq-dev \
 	nodejs \
     npm
