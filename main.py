@@ -13,7 +13,7 @@ import fcntl
 # Configuration
 UART_PORT = '/tmp/ttyUART0'
 REMOTE_APP_DIR = '/tmp/app'
-LOCAL_ARCHIVE_PATH = '/tmp/bin.tar.gz'
+LOCAL_ARCHIVE_PATH = '/tmp/code_loader/bin.tar.gz'
 
 
 class CodeLoader:
@@ -163,6 +163,7 @@ class CodeLoader:
         archive_path = LOCAL_ARCHIVE_PATH
 
         # 1. Compress local bin dir
+        os.makedirs(os.path.dirname(archive_path), exist_ok=True)
         print(f"[deploy] Creating {archive_path} from {local_bin_dir}...")
         with tarfile.open(archive_path, 'w:gz') as tar:
             tar.add(local_bin_dir, arcname='.')
