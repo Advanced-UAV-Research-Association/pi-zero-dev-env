@@ -13,10 +13,11 @@ fi
 # Clean up stale symlink from a previous container run
 rm -f "$PTY"
 
-# Start socat: PTY on one end, bash shell on the other
+# Start socat: PTY on one end, plain bash shell on the other
+# env -i clears the environment, --norc --noprofile skips all bashrc/profile scripts
 socat \
   PTY,link=${PTY},raw,echo=0 \
-  EXEC:bash,pty,setsid,stderr,sigint,sane \
+  EXEC:"env -i bash --norc --noprofile",pty,setsid,stderr,sigint,sane \
   &
 
 echo $! > "$PIDFILE"
