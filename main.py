@@ -94,7 +94,7 @@ class CodeLoader:
                 time.sleep(0.01)
         return buf.decode('utf-8', errors='replace')
 
-    def run_command(self, cmd, timeout=10):
+    def run_command(self, cmd, timeout=10, stream=False):
         """Send a command and return (output, exit_code)."""
         start_marker = "---START---"
         end_marker = "---END---"
@@ -102,38 +102,94 @@ class CodeLoader:
         script = f"\necho '{start_marker}'\n{cmd}\necho '{end_marker}'\necho $?\n"
         self._write(script)
 
-        # Read until end marker appears
-        raw = self._read_until(end_marker, timeout=timeout)
-        # Allow exit code line to arrive
-        time.sleep(0.1)
-        raw += self._read_all(timeout=1)
+        if not stream:
+            # Read until end marker appears
+            raw = self._read_until(end_marker, timeout=timeout)
+            # Allow exit code line to arrive
+            time.sleep(0.1)
+            raw += self._read_all(timeout=1)
 
-        lines = raw.splitlines()
+            lines = raw.splitlines()
+            output_lines = []
+            collecting = False
+
+            for line in lines:
+                stripped = line.strip()
+                if stripped == start_marker:
+                    collecting = True
+                    continue
+                if stripped == end_marker:
+                    collecting = False
+                    continue
+                if collecting:
+                    output_lines.append(line)
+
+            # Extract exit code: first standalone integer after end marker
+            exit_code = None
+            found_end = False
+            for line in lines:
+                stripped = line.strip()
+                if stripped == end_marker:
+                    found_end = True
+                    continue
+                if found_end and stripped.isdigit():
+                    exit_code = int(stripped)
+                    break
+
+            return '\n'.join(output_lines), exit_code
+
+        # Streaming mode: print output in real-time
+        assert self.fd is not None
+        buf = b''
         output_lines = []
         collecting = False
-
-        for line in lines:
-            stripped = line.strip()
-            if stripped == start_marker:
-                collecting = True
-                continue
-            if stripped == end_marker:
-                collecting = False
-                continue
-            if collecting:
-                output_lines.append(line)
-
-        # Extract exit code: first standalone integer after end marker
         exit_code = None
         found_end = False
-        for line in lines:
-            stripped = line.strip()
-            if stripped == end_marker:
+        start = time.time()
+
+        while time.time() - start < timeout:
+            try:
+                chunk = os.read(self.fd, 1024)
+                if chunk:
+                    buf += chunk
+                    while b'\n' in buf:
+                        line, buf = buf.split(b'\n', 1)
+                        line_str = line.decode('utf-8', errors='replace').rstrip('\r')
+                        stripped = line_str.strip()
+
+                        if stripped == start_marker:
+                            collecting = True
+                            continue
+                        if stripped == end_marker:
+                            collecting = False
+                            found_end = True
+                            continue
+                        if found_end and stripped.isdigit():
+                            exit_code = int(stripped)
+                            found_end = False
+                            continue
+                        if collecting:
+                            output_lines.append(line_str)
+                            print(line_str, flush=True)
+                else:
+                    time.sleep(0.01)
+            except (BlockingIOError, OSError):
+                time.sleep(0.01)
+
+        # Handle any remaining data in buffer
+        if buf:
+            line_str = buf.decode('utf-8', errors='replace').rstrip('\r')
+            stripped = line_str.strip()
+            if stripped == start_marker:
+                collecting = True
+            elif stripped == end_marker:
+                collecting = False
                 found_end = True
-                continue
-            if found_end and stripped.isdigit():
+            elif found_end and stripped.isdigit():
                 exit_code = int(stripped)
-                break
+            elif collecting and stripped:
+                output_lines.append(line_str)
+                print(line_str, flush=True)
 
         return '\n'.join(output_lines), exit_code
 
@@ -190,14 +246,9 @@ class CodeLoader:
 
         # 5. Run entry.sh
         print(f"[deploy] Running {remote_app_dir}/entry.sh...")
-        out, code = self.run_command(f"bash {remote_app_dir}/entry.sh")
+        out, code = self.run_command(f"bash {remote_app_dir}/entry.sh", stream=True)
 
-        # 6. Print output
-        print("[deploy] --- OUTPUT ---")
-        print(out)
-        print("[deploy] --- END OUTPUT ---")
-
-        # 7. Print exit code
+        # 6. Print exit code
         print(f"[deploy] Exit code: {code}")
 
         return code
