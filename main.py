@@ -176,7 +176,8 @@ class CodeLoader:
 
         # 3. Upload archive
         remote_archive = f"/tmp/{os.path.basename(archive_path)}"
-        print(f"[deploy] Uploading to {remote_archive}...")
+        size = os.path.getsize(archive_path)
+        print(f"[deploy] Uploading to {remote_archive} ({size} bytes)...")
         self.upload_file(archive_path, remote_archive)
 
         # 4. Extract
