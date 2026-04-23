@@ -6,6 +6,7 @@ RUN apt update \
 	# npx because we love vibe coding
 	&& apt install -y \
 	cppzmq-dev \
+	socat \
+	screen \
 	nodejs \
     npm
-

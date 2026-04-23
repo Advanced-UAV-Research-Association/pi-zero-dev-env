@@ -40,6 +40,8 @@
 
 	// Create a venv and install deps into it (no system Python writes)
 	"postCreateCommand": "python -m venv .venv && ./.venv/bin/python -m pip install --upgrade pip && ./.venv/bin/pip install -r requirements.txt",
+	// start the uart sim
+	"postStartCommand": "nohup bash .devcontainer/scripts/start-sim.sh > /tmp/uart-sim.log 2>&1 &",	
 
 	// ensure vscode user is used by default
 	"remoteUser": "vscode"
