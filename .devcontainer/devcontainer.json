@@ -6,6 +6,7 @@
 		"dockerfile": "Dockerfile",
 		"context": "."
 	},
+	"network": "host",
 
 	// Configure tool-specific properties.
 	"customizations": {
