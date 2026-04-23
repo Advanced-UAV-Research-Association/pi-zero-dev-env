@@ -205,8 +205,11 @@ class CodeLoader:
         heredoc = f"base64 -d > {remote_path} << 'UPLOAD_EOF'\n{wrapped}\nUPLOAD_EOF\n"
         self._write(heredoc)
 
-        # Wait for heredoc processing
-        time.sleep(0.5)
+        # Wait for heredoc processing (base64 content + shell processing)
+        time.sleep(1.0)
+
+        # Drain any remaining heredoc output before verification
+        self._drain()
 
         # Verify
         out, code = self.run_command(f"ls -l {remote_path}", timeout=5)
