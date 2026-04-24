@@ -86,6 +86,47 @@ def generate_sha256_hash(archive_path):
     return sha256_hash.hexdigest()
 
 
+def upload_code(archive_path=None):
+    """Upload code to the board.
+
+    Compresses the bin directory and prepares the archive for upload.
+    The actual upload logic should be implemented here.
+
+    Args:
+        archive_path: Optional path to an existing archive file.
+                      If None, a new archive will be created.
+
+    Returns:
+        str: Path to the archive file, or None if upload failed.
+    """
+    print("Uploading code...")
+
+    # Create archive if not provided
+    if archive_path is None:
+        archive_path = compress_bin_directory()
+        print(f"Archive created at: {archive_path}")
+
+    archive_size = get_archive_size(archive_path)
+    print(f"Archive size: {archive_size} bytes")
+
+    archive_hash = generate_sha256_hash(archive_path)
+    print(f"SHA256 hash: {archive_hash}")
+
+    # TODO: implement upload logic using archive_path, archive_size, archive_hash
+
+    return archive_path
+
+
+def run_code():
+    """Run the uploaded code on the board.
+
+    The actual run logic should be implemented here.
+    """
+    print("Running code...")
+    # TODO: implement run logic
+    pass
+
+
 def main():
     """Main entry point for the Code Loader CLI.
 
@@ -108,33 +149,14 @@ def main():
     if not any([args.upload, args.run, args.upload_and_run]):
         args.upload_and_run = True
 
-    # prepare archive for upload actions
-    archive_path = None
-    if args.upload or args.upload_and_run:
-        if args.upload_and_run:
-            print("Uploading and running code...")
-        else:
-            print("Uploading code...")
-
-        archive_path = compress_bin_directory()
-        print(f"Archive created at: {archive_path}")
-
-        archive_size = get_archive_size(archive_path)
-        print(f"Archive size: {archive_size} bytes")
-
-        archive_hash = generate_sha256_hash(archive_path)
-        print(f"SHA256 hash: {archive_hash}")
-
-        # TODO: implement upload logic using archive_path, archive_size, archive_hash
-
-    if args.run:
-        print("Running code...")
-        # TODO: implement run logic
-        pass
-
     if args.upload_and_run:
-        # TODO: implement upload-and-run logic using archive_path, archive_size, archive_hash
-        pass
+        print("Uploading and running code...")
+        upload_code()
+        run_code()
+    elif args.upload:
+        upload_code()
+    elif args.run:
+        run_code()
 
 
 if __name__ == "__main__":
