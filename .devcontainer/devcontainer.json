@@ -40,8 +40,7 @@
 			"installZsh": "true",
 			"username": "vscode",
 			"userUid": "1000",
-			"userGid": "1000",
-			"upgradePackages": "true"
+			"userGid": "1000"
 		},
 		"ghcr.io/devcontainers/features/git:1": {},
 		"ghcr.io/devcontainers-extra/features/cmake:1": {},
