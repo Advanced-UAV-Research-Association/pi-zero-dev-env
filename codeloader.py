@@ -25,9 +25,13 @@ LOCAL_BIN_DIR = './bin'
 # Name of the archive file
 ARCHIVE_NAME = 'bin.tar.gz'
 
-################################################################################
-# Configuration
-################################################################################
+# Simulated Environment Configuration
+# Used when SIMULATED_ENV=1; values imported from main.py
+SIMULATED_UART_PORT = '/tmp/ttyUART0'
+SIMULATED_REMOTE_APP_DIR = '/tmp/app'
+
+# Real Environment Configuration
+REAL_REMOTE_APP_DIR = '/app'
 
 
 def discovered_uart():
@@ -46,8 +50,9 @@ def get_config():
     """Get configuration based on environment.
 
     If the SIMULATED_ENV environment variable exists and is equal to '1',
-    uses the remote path and UART port from main.py.
-    Otherwise, uses default values: /app for remote app dir and
+    uses the simulated environment constants (SIMULATED_UART_PORT and
+    SIMULATED_REMOTE_APP_DIR).
+    Otherwise, uses REAL_REMOTE_APP_DIR for remote app dir and
     discovered_uart() for UART port.
 
     Returns:
@@ -56,17 +61,16 @@ def get_config():
     simulated_env = os.environ.get('SIMULATED_ENV')
 
     if simulated_env == '1':
-        # Import from main.py when in simulated environment
-        from main import UART_PORT, REMOTE_APP_DIR
+        # Use simulated environment values
         return {
-            'uart_port': UART_PORT,
-            'remote_app_dir': REMOTE_APP_DIR,
+            'uart_port': SIMULATED_UART_PORT,
+            'remote_app_dir': SIMULATED_REMOTE_APP_DIR,
         }
     else:
-        # Use default values
+        # Use real environment values
         return {
             'uart_port': discovered_uart(),
-            'remote_app_dir': '/app',
+            'remote_app_dir': REAL_REMOTE_APP_DIR,
         }
 
 
