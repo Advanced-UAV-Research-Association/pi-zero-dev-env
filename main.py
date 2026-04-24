@@ -5,10 +5,30 @@ Target: simulated UART shell in devcontainer (/tmp/ttyUART0).
 """
 
 import os
+import re
 import time
 import tarfile
 import base64
 import fcntl
+
+# Regex patterns for stripping bash prompts from output lines.
+# Handles common prompt formats:
+#   - user@host:dir$  (e.g., "root@raspberrypi:~# ")
+#   - shell-version$  (e.g., "bash-5.2$ ")
+#   - ~$              (e.g., "~$ " or "~/path$ ")
+#   - Standalone $# or $# on their own
+#
+# NOTE: No ^ anchor so re.sub replaces ALL occurrences (handles
+# lines like "bash-5.2$ bash-5.2$ ---END---" where \r causes
+# two prompts to appear on one line).
+_PROMPT_PREFIX_RE = re.compile(
+    r'(?:'
+    r'\S+@\S+:\S*\s*[#$]\s*'       # user@host:dir$ or user@host:dir#
+    r'|\S+-\d+\.\d+[#$]\s*'         # shell-version$ or shell-version#
+    r'|~[#$]\s*'                     # ~$ or ~#
+    r')'
+)
+_PROMPT_ONLY_RE = re.compile(r'^[#$]\s*$')
 
 # Configuration
 UART_PORT = '/tmp/ttyUART0'
@@ -42,6 +62,23 @@ class CodeLoader:
                     break
             except (BlockingIOError, OSError):
                 break
+
+    def _strip_prompt(self, line):
+        """Strip common bash prompt prefixes from an output line.
+
+        Handles prompts like:
+          - 'root@raspberrypi:~# '
+          - 'pi@raspberrypi:~$ '
+          - 'bash-5.2$ '
+          - '~$ '
+          - '# ' or '$ ' (standalone prompt chars on their own line)
+        """
+        # Strip known prefix patterns (user@host:dir, shell-version, ~)
+        line = _PROMPT_PREFIX_RE.sub('', line)
+        # Remove lines that are just a standalone prompt char
+        if _PROMPT_ONLY_RE.match(line):
+            return ''
+        return line
 
     def _write(self, data):
         assert self.fd is not None
@@ -114,7 +151,9 @@ class CodeLoader:
             collecting = False
 
             for line in lines:
-                stripped = line.strip()
+                # Strip bash prompt prefix before checking markers
+                cleaned = self._strip_prompt(line)
+                stripped = cleaned.strip()
                 if stripped == start_marker:
                     collecting = True
                     continue
@@ -122,13 +161,14 @@ class CodeLoader:
                     collecting = False
                     continue
                 if collecting:
-                    output_lines.append(line)
+                    output_lines.append(cleaned)
 
             # Extract exit code: first standalone integer after end marker
             exit_code = None
             found_end = False
             for line in lines:
-                stripped = line.strip()
+                cleaned = self._strip_prompt(line)
+                stripped = cleaned.strip()
                 if stripped == end_marker:
                     found_end = True
                     continue
@@ -155,7 +195,9 @@ class CodeLoader:
                     while b'\n' in buf:
                         line, buf = buf.split(b'\n', 1)
                         line_str = line.decode('utf-8', errors='replace').rstrip('\r')
-                        stripped = line_str.strip()
+                        # Strip bash prompt prefix
+                        cleaned = self._strip_prompt(line_str)
+                        stripped = cleaned.strip()
 
                         if stripped == start_marker:
                             collecting = True
@@ -169,8 +211,8 @@ class CodeLoader:
                             found_end = False
                             continue
                         if collecting:
-                            output_lines.append(line_str)
-                            print(line_str, flush=True)
+                            output_lines.append(cleaned)
+                            print(cleaned, flush=True)
                 else:
                     time.sleep(0.01)
             except (BlockingIOError, OSError):
@@ -179,7 +221,8 @@ class CodeLoader:
         # Handle any remaining data in buffer
         if buf:
             line_str = buf.decode('utf-8', errors='replace').rstrip('\r')
-            stripped = line_str.strip()
+            cleaned = self._strip_prompt(line_str)
+            stripped = cleaned.strip()
             if stripped == start_marker:
                 collecting = True
             elif stripped == end_marker:
@@ -188,8 +231,8 @@ class CodeLoader:
             elif found_end and stripped.isdigit():
                 exit_code = int(stripped)
             elif collecting and stripped:
-                output_lines.append(line_str)
-                print(line_str, flush=True)
+                output_lines.append(cleaned)
+                print(cleaned, flush=True)
 
         return '\n'.join(output_lines), exit_code
 
