@@ -87,6 +87,12 @@ def generate_sha256_hash(archive_path):
 
 
 def main():
+    """Main entry point for the Code Loader CLI.
+
+    Parses command-line arguments and executes the appropriate action:
+    upload, run, or upload-and-run. Defaults to upload-and-run
+    if no option is specified.
+    """
     parser = argparse.ArgumentParser(description="Code Loader for Raspberry Pi board")
     parser.add_argument("--upload", action="store_true", help="Upload code to the board")
     parser.add_argument("--run", action="store_true", help="Run the uploaded code on the board")
@@ -102,17 +108,20 @@ def main():
     if not any([args.upload, args.run, args.upload_and_run]):
         args.upload_and_run = True
 
-    if args.upload:
-        print("Uploading code...")
-        # Compress the bin directory
+    # prepare archive for upload actions
+    archive_path = None
+    if args.upload or args.upload_and_run:
+        if args.upload_and_run:
+            print("Uploading and running code...")
+        else:
+            print("Uploading code...")
+
         archive_path = compress_bin_directory()
         print(f"Archive created at: {archive_path}")
 
-        # Get archive size
         archive_size = get_archive_size(archive_path)
         print(f"Archive size: {archive_size} bytes")
 
-        # Generate SHA256 hash
         archive_hash = generate_sha256_hash(archive_path)
         print(f"SHA256 hash: {archive_hash}")
 
@@ -121,22 +130,11 @@ def main():
     if args.run:
         print("Running code...")
         # TODO: implement run logic
+        pass
 
     if args.upload_and_run:
-        print("Uploading and running code...")
-        # Compress the bin directory
-        archive_path = compress_bin_directory()
-        print(f"Archive created at: {archive_path}")
-
-        # Get archive size
-        archive_size = get_archive_size(archive_path)
-        print(f"Archive size: {archive_size} bytes")
-
-        # Generate SHA256 hash
-        archive_hash = generate_sha256_hash(archive_path)
-        print(f"SHA256 hash: {archive_hash}")
-
         # TODO: implement upload-and-run logic using archive_path, archive_size, archive_hash
+        pass
 
 
 if __name__ == "__main__":
