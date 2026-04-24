@@ -19,6 +19,18 @@
 			},
 			"extensions": [
 			]
+		},
+		"vscodium": {
+			"extensions": {
+				"kilocode.kilo-code": {
+				  "version": "5.13.0"
+				},
+				"detachhead.basedpyright": {},
+				"tamasfe.even-better-toml": {},
+				"mhutchie.git-graph": {},
+				"ms-python.python": {},
+				"Gruntfuggly.todo-tree": {}
+			}
 		}
 	},
 
