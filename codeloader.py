@@ -25,6 +25,50 @@ LOCAL_BIN_DIR = './bin'
 # Name of the archive file
 ARCHIVE_NAME = 'bin.tar.gz'
 
+################################################################################
+# Configuration
+################################################################################
+
+
+def discovered_uart():
+    """Discover the UART port automatically.
+
+    TODO: Implement automatic UART port discovery.
+    For now, returns a default value.
+
+    Returns:
+        str: The UART port path.
+    """
+    return '/dev/ttyUART0'
+
+
+def get_config():
+    """Get configuration based on environment.
+
+    If the SIMULATED_ENV environment variable exists and is equal to '1',
+    uses the remote path and UART port from main.py.
+    Otherwise, uses default values: /app for remote app dir and
+    discovered_uart() for UART port.
+
+    Returns:
+        dict: Configuration dictionary with 'uart_port' and 'remote_app_dir' keys.
+    """
+    simulated_env = os.environ.get('SIMULATED_ENV')
+
+    if simulated_env == '1':
+        # Import from main.py when in simulated environment
+        from main import UART_PORT, REMOTE_APP_DIR
+        return {
+            'uart_port': UART_PORT,
+            'remote_app_dir': REMOTE_APP_DIR,
+        }
+    else:
+        # Use default values
+        return {
+            'uart_port': discovered_uart(),
+            'remote_app_dir': '/app',
+        }
+
 
 def compress_bin_directory(temp_dir=CODELOADER_TEMP_DIR, bin_dir=LOCAL_BIN_DIR, archive_name=ARCHIVE_NAME):
     """Compress the bin directory into a tar.gz archive in the temporary directory.
