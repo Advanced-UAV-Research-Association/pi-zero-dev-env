@@ -76,6 +76,12 @@ class CodeLoader:
         self.run_command("stty -echo", timeout=2)
         self._drain()
 
+    def close(self):
+        """Close the UART file descriptor."""
+        if self.fd is not None:
+            os.close(self.fd)
+            self.fd = None
+
     def _drain(self):
         """Discard any buffered data."""
         assert self.fd is not None
@@ -145,12 +151,13 @@ class CodeLoader:
                 time.sleep(0.01)
         return buf.decode('utf-8', errors='replace')
 
-    def run_command(self, cmd, timeout=10):
+    def run_command(self, cmd, timeout=10, stream=False):
         """Send a command and return (output, exit_code).
 
         Args:
             cmd: The shell command to execute.
             timeout: Maximum time to wait for the command to complete.
+            stream: If True, print output in real-time (streaming mode).
 
         Returns:
             tuple: (output_string, exit_code_int or None)
@@ -172,36 +179,107 @@ class CodeLoader:
         )
         self._write(script)
 
-        # Read until end marker appears
-        raw = self._read_until(end_marker, timeout=timeout)
-        # Allow exit code line to arrive
-        time.sleep(0.1)
-        raw += self._read_all(timeout=1)
+        if not stream:
+            # Read until end marker appears
+            raw = self._read_until(end_marker, timeout=timeout)
+            # Allow exit code line to arrive
+            time.sleep(0.1)
+            raw += self._read_all(timeout=1)
 
-        lines = raw.splitlines()
+            lines = raw.splitlines()
+            output_lines = []
+            collecting = False
+            exit_code = None
+
+            for line in lines:
+                cleaned = self._strip_prompt(line)
+                stripped = cleaned.strip()
+
+                # Check for exit code line first (has unique prefix)
+                if stripped.startswith(exit_prefix):
+                    exit_str = stripped[len(exit_prefix):]
+                    if exit_str.isdigit():
+                        exit_code = int(exit_str)
+                    continue
+
+                if stripped == start_marker:
+                    collecting = True
+                    continue
+                if stripped == end_marker:
+                    collecting = False
+                    continue
+                if collecting:
+                    output_lines.append(cleaned)
+
+            return '\n'.join(output_lines), exit_code
+
+        # Streaming mode: print output in real-time
+        assert self.fd is not None
+        buf = b''
         output_lines = []
         collecting = False
         exit_code = None
+        found_end = False
+        start = time.time()
 
-        for line in lines:
-            cleaned = self._strip_prompt(line)
+        while time.time() - start < timeout:
+            try:
+                chunk = os.read(self.fd, 1024)
+                if chunk:
+                    buf += chunk
+                    while b'\n' in buf:
+                        line, buf = buf.split(b'\n', 1)
+                        line_str = line.decode('utf-8', errors='replace').rstrip('\r')
+                        # Strip bash prompt prefix
+                        cleaned = self._strip_prompt(line_str)
+                        stripped = cleaned.strip()
+
+                        # Check for exit code line first (has unique prefix)
+                        if stripped.startswith(exit_prefix):
+                            exit_str = stripped[len(exit_prefix):]
+                            if exit_str.isdigit():
+                                exit_code = int(exit_str)
+                            continue
+
+                        if stripped == start_marker:
+                            collecting = True
+                            continue
+                        if stripped == end_marker:
+                            collecting = False
+                            found_end = True
+                            continue
+                        if found_end and stripped.isdigit():
+                            exit_code = int(stripped)
+                            found_end = False
+                            continue
+                        if collecting:
+                            output_lines.append(cleaned)
+                            print(cleaned, flush=True)
+                else:
+                    time.sleep(0.01)
+            except (BlockingIOError, OSError):
+                time.sleep(0.01)
+
+        # Handle any remaining data in buffer
+        if buf:
+            line_str = buf.decode('utf-8', errors='replace').rstrip('\r')
+            cleaned = self._strip_prompt(line_str)
             stripped = cleaned.strip()
 
-            # Check for exit code line first (has unique prefix)
             if stripped.startswith(exit_prefix):
                 exit_str = stripped[len(exit_prefix):]
                 if exit_str.isdigit():
                     exit_code = int(exit_str)
-                continue
-
-            if stripped == start_marker:
+            elif stripped == start_marker:
                 collecting = True
-                continue
-            if stripped == end_marker:
+            elif stripped == end_marker:
                 collecting = False
-                continue
-            if collecting:
+                found_end = True
+            elif found_end and stripped.isdigit():
+                exit_code = int(stripped)
+            elif collecting and stripped:
                 output_lines.append(cleaned)
+                print(cleaned, flush=True)
 
         return '\n'.join(output_lines), exit_code
 
@@ -441,11 +519,47 @@ def upload_code(archive_path=None):
 def run_code():
     """Run the uploaded code on the board.
 
-    The actual run logic should be implemented here.
+    Connects to the board via UART, checks if entry.sh exists,
+    and runs it with streaming output.
     """
-    print("Running code...")
-    # TODO: implement run logic
-    pass
+    # Get configuration
+    config = get_config()
+    uart_port = config['uart_port']
+    remote_app_dir = config['remote_app_dir']
+    remote_entry_sh = f'{remote_app_dir}/bin/entry.sh'
+
+    loader = None
+    try:
+        # Connect to the UART device
+        print(f'[codeloader] Connecting to {uart_port}...')
+        loader = CodeLoader(uart_port)
+
+        # Check if entry.sh exists on the remote
+        check_cmd = f'test -f {remote_entry_sh} && echo "exists"'
+        output, exit_code = loader.run_command(check_cmd, timeout=5)
+
+        if exit_code != 0 or 'exists' not in output:
+            print(f'[codeloader] No code found to run at {remote_entry_sh}')
+            return
+
+        # Run entry.sh with streaming output
+        print(f'[codeloader] Running {remote_entry_sh}...')
+        output, exit_code = loader.run_command(remote_entry_sh, timeout=120, stream=True)
+
+        # Print exit code and status
+        if exit_code is not None:
+            if exit_code == 0:
+                print(f'\n[codeloader] Program exited successfully with code {exit_code}')
+            else:
+                print(f'\n[codeloader] Program exited with non-zero code {exit_code}')
+        else:
+            print('\n[codeloader] Program exited (exit code unknown)')
+
+    except Exception as e:
+        print(f'[codeloader] Error: {e}')
+    finally:
+        if loader is not None:
+            loader.close()
 
 
 def main():
