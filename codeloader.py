@@ -418,6 +418,17 @@ def upload_code(archive_path=None):
 
         print(f"[codeloader] Integrity verified. SHA256 hash: {archive_hash}")
 
+        # Extract the archive to the remote app directory
+        print(f"[codeloader] Extracting archive to {remote_app_dir}...")
+        extract_out, extract_code = loader.run_command(
+            f"tar -xzf {remote_archive_path} -C {remote_app_dir}"
+        )
+        if extract_code != 0:
+            print(f"[ERROR] Failed to extract archive: {extract_out}")
+            sys.exit(1)
+
+        print(f"[codeloader] Extraction complete.")
+
     finally:
         # Close the UART connection
         if loader.fd is not None:
