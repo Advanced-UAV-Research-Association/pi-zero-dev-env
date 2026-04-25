@@ -505,6 +505,15 @@ def upload_code(archive_path=None):
             print(f"[ERROR] Failed to extract archive: {extract_out}")
             sys.exit(1)
 
+        # Make entry.sh and any other scripts executable
+        print(f"[codeloader] Setting executable permissions on scripts...")
+        chmod_out, chmod_code = loader.run_command(
+            f"find {remote_app_dir} -name '*.sh' -exec chmod +x {{}} \\;"
+        )
+        if chmod_code != 0:
+            print(f"[ERROR] Failed to set executable permissions: {chmod_out}")
+            sys.exit(1)
+
         print(f"[codeloader] Extraction complete.")
 
     finally:
@@ -542,9 +551,10 @@ def run_code():
             print(f'[codeloader] No code found to run at {remote_entry_sh}')
             return
 
-        # Run entry.sh with streaming output
-        print(f'[codeloader] Running {remote_entry_sh}...')
-        output, exit_code = loader.run_command(remote_entry_sh, timeout=120, stream=True)
+        # Run entry.sh with streaming output, changing to its directory first
+        entry_dir = os.path.dirname(remote_entry_sh)
+        print(f'[codeloader] Running {remote_entry_sh} from {entry_dir}...')
+        output, exit_code = loader.run_command(f"cd {entry_dir} && ./entry.sh", timeout=120, stream=True)
 
         # Print exit code and status
         if exit_code is not None:
