@@ -247,7 +247,7 @@ class CodeLoader:
                         if stripped == end_marker:
                             collecting = False
                             found_end = True
-                            continue
+                            break
                         if found_end and stripped.isdigit():
                             exit_code = int(stripped)
                             found_end = False
@@ -255,10 +255,14 @@ class CodeLoader:
                         if collecting:
                             output_lines.append(cleaned)
                             print(cleaned, flush=True)
+                    if found_end:
+                        break
                 else:
                     time.sleep(0.01)
             except (BlockingIOError, OSError):
                 time.sleep(0.01)
+            if found_end:
+                break
 
         # Handle any remaining data in buffer
         if buf:
