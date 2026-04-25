@@ -12,6 +12,7 @@ import fcntl
 import hashlib
 import os
 import re
+import sys
 import tarfile
 import tempfile
 import time
@@ -390,13 +391,38 @@ def upload_code(archive_path=None):
     try:
         # Remove the app directory on the remote
         loader.remove_remote_dir(remote_app_dir)
+
+        # Recreate the app directory (it was just removed)
+        loader.run_command(f"mkdir -p {remote_app_dir}")
+
+        # Upload the archive to the remote target
+        remote_archive_path = f"{remote_app_dir}/{ARCHIVE_NAME}"
+        print(f"[codeloader] Uploading {archive_path} to {remote_archive_path}...")
+        loader.upload_file(archive_path, remote_archive_path)
+        print(f"[codeloader] Upload complete. Size: {archive_size} bytes")
+
+        # Verify integrity by computing SHA256 on the remote target
+        print("[codeloader] Verifying upload integrity...")
+        verify_out, verify_code = loader.run_command(f"sha256sum {remote_archive_path}")
+        if verify_code != 0:
+            print(f"[ERROR] Failed to compute SHA256 on remote: {verify_out}")
+            sys.exit(1)
+
+        # Extract the remote hash from the sha256sum output (format: "{hash}  {filename}")
+        remote_hash = verify_out.strip().split()[0]
+
+        # Compare hashes
+        if archive_hash != remote_hash:
+            print(f"[ERROR] Hash mismatch! Local: {archive_hash}, Remote: {remote_hash}")
+            sys.exit(1)
+
+        print(f"[codeloader] Integrity verified. SHA256 hash: {archive_hash}")
+
     finally:
         # Close the UART connection
         if loader.fd is not None:
             os.close(loader.fd)
             loader.fd = None
-
-    # TODO: implement remaining upload logic using archive_path, archive_size, archive_hash
 
     return archive_path
 
