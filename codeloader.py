@@ -448,18 +448,18 @@ def upload_code(archive_path=None):
     Returns:
         str: Path to the archive file, or None if upload failed.
     """
-    print("Uploading code...")
+    print("[codeloader:upload] Uploading code...")
 
     # Create archive if not provided
     if archive_path is None:
         archive_path = compress_bin_directory()
-        print(f"Archive created at: {archive_path}")
+        print(f"[codeloader:upload] Archive created at: {archive_path}")
 
     archive_size = get_archive_size(archive_path)
-    print(f"Archive size: {archive_size} bytes")
+    print(f"[codeloader:upload] Archive size: {archive_size} bytes")
 
     archive_hash = generate_sha256_hash(archive_path)
-    print(f"SHA256 hash: {archive_hash}")
+    print(f"[codeloader:upload] SHA256 hash: {archive_hash}")
 
     # Get configuration
     config = get_config()
@@ -479,15 +479,15 @@ def upload_code(archive_path=None):
 
         # Upload the archive to the remote target
         remote_archive_path = f"{remote_app_dir}/{ARCHIVE_NAME}"
-        print(f"[codeloader] Uploading {archive_path} to {remote_archive_path}...")
+        print(f"[codeloader:upload] Uploading {archive_path} to {remote_archive_path}...")
         loader.upload_file(archive_path, remote_archive_path)
-        print(f"[codeloader] Upload complete. Size: {archive_size} bytes")
+        print(f"[codeloader:upload] Upload complete. Size: {archive_size} bytes")
 
         # Verify integrity by computing SHA256 on the remote target
-        print("[codeloader] Verifying upload integrity...")
+        print("[codeloader:upload] Verifying upload integrity...")
         verify_out, verify_code = loader.run_command(f"sha256sum {remote_archive_path}")
         if verify_code != 0:
-            print(f"[ERROR] Failed to compute SHA256 on remote: {verify_out}")
+            print(f"[codeloader:upload] Failed to compute SHA256 on remote: {verify_out}")
             sys.exit(1)
 
         # Extract the remote hash from the sha256sum output (format: "{hash}  {filename}")
@@ -495,30 +495,30 @@ def upload_code(archive_path=None):
 
         # Compare hashes
         if archive_hash != remote_hash:
-            print(f"[ERROR] Hash mismatch! Local: {archive_hash}, Remote: {remote_hash}")
+            print(f"[codeloader:upload] Hash mismatch! Local: {archive_hash}, Remote: {remote_hash}")
             sys.exit(1)
 
-        print(f"[codeloader] Integrity verified. SHA256 hash: {archive_hash}")
+        print(f"[codeloader:upload] Integrity verified. SHA256 hash: {archive_hash}")
 
         # Extract the archive to the remote app directory
-        print(f"[codeloader] Extracting archive to {remote_app_dir}...")
+        print(f"[codeloader:upload] Extracting archive to {remote_app_dir}...")
         extract_out, extract_code = loader.run_command(
             f"tar -xzf {remote_archive_path} -C {remote_app_dir}"
         )
         if extract_code != 0:
-            print(f"[ERROR] Failed to extract archive: {extract_out}")
+            print(f"[codeloader:upload] Failed to extract archive: {extract_out}")
             sys.exit(1)
 
         # Make entry.sh and any other scripts executable
-        print(f"[codeloader] Setting executable permissions on scripts...")
+        print(f"[codeloader:upload] Setting executable permissions on scripts...")
         chmod_out, chmod_code = loader.run_command(
             f"find {remote_app_dir} -name '*.sh' -exec chmod +x {{}} \\;"
         )
         if chmod_code != 0:
-            print(f"[ERROR] Failed to set executable permissions: {chmod_out}")
+            print(f"[codeloader:upload] Failed to set executable permissions: {chmod_out}")
             sys.exit(1)
 
-        print(f"[codeloader] Extraction complete.")
+        print(f"[codeloader:upload] Extraction complete.")
 
     finally:
         # Close the UART connection
@@ -544,7 +544,7 @@ def run_code():
     loader = None
     try:
         # Connect to the UART device
-        print(f'[codeloader] Connecting to {uart_port}...')
+        print(f'[codeloader:run] Connecting to {uart_port}...')
         loader = CodeLoader(uart_port)
 
         # Check if entry.sh exists on the remote
@@ -552,25 +552,25 @@ def run_code():
         output, exit_code = loader.run_command(check_cmd, timeout=5)
 
         if exit_code != 0 or 'exists' not in output:
-            print(f'[codeloader] No code found to run at {remote_entry_sh}')
+            print(f'[codeloader:run] No code found to run at {remote_entry_sh}')
             return
 
         # Run entry.sh with streaming output, changing to its directory first
         entry_dir = os.path.dirname(remote_entry_sh)
-        print(f'[codeloader] Running {remote_entry_sh} from {entry_dir}...')
+        print(f'[codeloader:run] Running {remote_entry_sh} from {entry_dir}...')
         output, exit_code = loader.run_command(f"cd {entry_dir} && ./entry.sh", timeout=120, stream=True)
 
         # Print exit code and status
         if exit_code is not None:
             if exit_code == 0:
-                print(f'\n[codeloader] Program exited successfully with code {exit_code}')
+                print(f'\n[codeloader:run] Program exited successfully with code {exit_code}')
             else:
-                print(f'\n[codeloader] Program exited with non-zero code {exit_code}')
+                print(f'\n[codeloader:run] Program exited with non-zero code {exit_code}')
         else:
-            print('\n[codeloader] Program exited (exit code unknown)')
+            print('\n[codeloader:run] Program exited (exit code unknown)')
 
     except Exception as e:
-        print(f'[codeloader] Error: {e}')
+        print(f'[codeloader:run] Error: {e}')
     finally:
         if loader is not None:
             loader.close()
@@ -599,7 +599,7 @@ def main():
         args.upload_and_run = True
 
     if args.upload_and_run:
-        print("Uploading and running code...")
+        print("[codeloader] Uploading and running code...")
         upload_code()
         run_code()
     elif args.upload:
