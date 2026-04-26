@@ -1,5 +1,5 @@
 numpy
-scipy
+pyserial
 pyzmq
 # testing library
 pytest

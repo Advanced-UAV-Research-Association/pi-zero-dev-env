@@ -12,6 +12,7 @@ import fcntl
 import hashlib
 import os
 import re
+import serial.tools.list_ports
 import sys
 import tarfile
 import tempfile
@@ -338,13 +339,22 @@ class CodeLoader:
 def discovered_uart():
     """Discover the UART port automatically.
 
-    TODO: Implement automatic UART port discovery.
-    For now, returns a default value.
+    Scans for the first USB UART device on the system. Exits with an error
+    message if no USB serial device is found.
 
     Returns:
         str: The UART port path.
+
+    Exits:
+        sys.exit(1): If no USB UART device is found.
     """
-    return '/dev/ttyUART0'
+    for port in serial.tools.list_ports.comports():
+        if port.vid is not None and port.pid is not None:
+            return port.device
+
+    print("[ERROR] No USB UART device found")
+    print("hint: Ensure a USB serial adapter is connected.")
+    sys.exit(1)
 
 
 def get_config():
