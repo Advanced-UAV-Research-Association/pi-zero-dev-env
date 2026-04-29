@@ -8,10 +8,10 @@
 
 import argparse
 import base64
-import fcntl
 import hashlib
 import os
 import re
+import serial
 import serial.tools.list_ports
 import sys
 import tarfile
@@ -39,6 +39,9 @@ SIMULATED_REMOTE_APP_DIR = '/tmp/app'
 # Real Environment Configuration
 REAL_REMOTE_APP_DIR = '/app'
 
+# Serial communication baud rate
+SERIAL_BAUDRATE = 115200
+
 ################################################################################
 # UART Communication Helpers
 ################################################################################
@@ -57,17 +60,21 @@ _PROMPT_ONLY_RE = re.compile(r'^[#$]\s*$')
 class CodeLoader:
     """Handles UART serial communication with the remote board.
 
-    Connects to a UART port, disables echo, and provides methods to
-    run commands and upload files over the shell connection.
+    Connects to a UART port using pyserial, disables echo, and provides
+    methods to run commands and upload files over the shell connection.
     """
 
     def __init__(self, port):
         self.port = port
-        self.fd: int | None = None
-        # Open PTY (non-blocking via fcntl after open)
-        self.fd = os.open(port, os.O_RDWR | os.O_NOCTTY)
-        flags = fcntl.fcntl(self.fd, fcntl.F_GETFL)
-        fcntl.fcntl(self.fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+        self._serial: serial.Serial | None = None
+        # Open serial port with configured baud rate
+        self._serial = serial.Serial(
+            port=port,
+            baudrate=SERIAL_BAUDRATE,
+            timeout=0,  # Non-blocking reads
+        )
+        # Expose fd for backward compatibility (tests check loader.fd)
+        self.fd = self._serial
 
         # Allow shell to settle
         time.sleep(0.3)
@@ -78,20 +85,21 @@ class CodeLoader:
         self._drain()
 
     def close(self):
-        """Close the UART file descriptor."""
-        if self.fd is not None:
-            os.close(self.fd)
+        """Close the serial connection."""
+        if self._serial is not None:
+            self._serial.close()
+            self._serial = None
             self.fd = None
 
     def _drain(self):
         """Discard any buffered data."""
-        assert self.fd is not None
+        assert self._serial is not None
         while True:
             try:
-                chunk = os.read(self.fd, 4096)
+                chunk = self._serial.read(4096)
                 if not chunk:
                     break
-            except (BlockingIOError, OSError):
+            except serial.SerialException:
                 break
 
     def _strip_prompt(self, line):
@@ -102,39 +110,39 @@ class CodeLoader:
         return line
 
     def _write(self, data):
-        assert self.fd is not None
+        assert self._serial is not None
         if isinstance(data, str):
             data = data.encode('utf-8')
-        os.write(self.fd, data)
+        self._serial.write(data)
 
     def _read_until(self, marker, timeout=5):
         """Read until marker appears or timeout."""
-        assert self.fd is not None
+        assert self._serial is not None
         marker_b = marker.encode()
         buf = b''
         start = time.time()
         while time.time() - start < timeout:
             try:
-                chunk = os.read(self.fd, 1024)
+                chunk = self._serial.read(1024)
                 if chunk:
                     buf += chunk
                     if marker_b in buf:
                         return buf.decode('utf-8', errors='replace')
                 else:
                     time.sleep(0.01)
-            except (BlockingIOError, OSError):
+            except serial.SerialException:
                 time.sleep(0.01)
         return buf.decode('utf-8', errors='replace')
 
     def _read_all(self, timeout=1):
         """Read all available data after a quiet period."""
-        assert self.fd is not None
+        assert self._serial is not None
         buf = b''
         quiet_start = None
         start = time.time()
         while time.time() - start < timeout:
             try:
-                chunk = os.read(self.fd, 4096)
+                chunk = self._serial.read(4096)
                 if chunk:
                     buf += chunk
                     quiet_start = None
@@ -144,7 +152,7 @@ class CodeLoader:
                     elif time.time() - quiet_start > 0.3:
                         break
                     time.sleep(0.01)
-            except (BlockingIOError, OSError):
+            except serial.SerialException:
                 if quiet_start is None:
                     quiet_start = time.time()
                 elif time.time() - quiet_start > 0.3:
@@ -215,7 +223,7 @@ class CodeLoader:
             return '\n'.join(output_lines), exit_code
 
         # Streaming mode: print output in real-time
-        assert self.fd is not None
+        assert self._serial is not None
         buf = b''
         output_lines = []
         collecting = False
@@ -225,7 +233,7 @@ class CodeLoader:
 
         while time.time() - start < timeout:
             try:
-                chunk = os.read(self.fd, 1024)
+                chunk = self._serial.read(1024)
                 if chunk:
                     buf += chunk
                     while b'\n' in buf:
@@ -532,9 +540,7 @@ def upload_code(archive_path=None):
 
     finally:
         # Close the UART connection
-        if loader.fd is not None:
-            os.close(loader.fd)
-            loader.fd = None
+        loader.close()
 
     return archive_path
 
