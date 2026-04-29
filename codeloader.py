@@ -513,7 +513,8 @@ def upload_code(archive_path=None):
         # Strip ANSI escape sequences that may be present in UART output
         clean_output = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', verify_out)
         parts = clean_output.strip().split()
-        remote_hash = parts[0] if parts else ""
+        print(parts)
+        remote_hash = parts[1] if parts else ""
 
         # Compare hashes
         if archive_hash != remote_hash:
