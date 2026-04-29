@@ -504,11 +504,13 @@ def upload_code(archive_path=None):
         # Verify integrity by computing SHA256 on the remote target
         print("[codeloader:upload] Verifying upload integrity...")
         verify_out, verify_code = loader.run_command(f"sha256sum {remote_archive_path}")
+        print(f"verify out: {verify_out}")
         if verify_code != 0:
             print(f"[codeloader:upload] Failed to compute SHA256 on remote: {verify_out}")
             sys.exit(1)
 
         # Extract the remote hash from the sha256sum output (format: "{hash}  {filename}")
+        print(verify_out.strip().split())
         remote_hash = verify_out.strip().split()[0]
 
         # Compare hashes
