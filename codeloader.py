@@ -509,7 +509,9 @@ def upload_code(archive_path=None):
             sys.exit(1)
 
         # Extract the remote hash from the sha256sum output (format: "{hash}  {filename}")
-        remote_hash = verify_out.strip().split()[0]
+        # FIXME We index the second line of the output since the first is an escape sequence
+        # There is probably a proper way of doing this, but this works for now
+        remote_hash = verify_out.strip().split()[1]
 
         # Compare hashes
         if archive_hash != remote_hash:
